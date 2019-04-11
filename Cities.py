@@ -192,6 +192,16 @@ def play_game(res,req):
     if not city:
         res['response']['text'] = 'Я не знаю такого города, попробуй другой'
         return
+    if city in sessionStorage[user_id]['called_cities']:
+        res['response']['text'] = 'Этот город уже был! Назови другой.'
+        return
+    elif not sessionStorage[user_id]['called_cities']:
+        sessionStorage[user_id]['called_cities'].append(city)
+    elif (city[0].lower() == sessionStorage[user_id]['called_cities'][-1][-2].lower() and sessionStorage[user_id]['called_cities'][-1][-1].lower() in ['ь', 'ы']) or city[0].lower() == sessionStorage[user_id]['called_cities'][-1][-1].lower():
+        litter = sessionStorage[user_id]['called_cities'][-1][-1]
+        litter = sessionStorage[user_id]['called_cities'][-1][-2] if litter in ['ъ', 'ь', 'ы'] else litter
+        res['response']['text'] = f'Нет, тебе на "{litter}".'
+        return
     else:
         sessionStorage[user_id]['called_cities'].append(city)
     # Alisa's move
