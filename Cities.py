@@ -1,10 +1,8 @@
 import json
 from flask import Flask, request
 import logging
-import requests
-import os
 
-with open('/home/Dmitry315/mysite/formated_cities.json',mode='r',encoding='utf-8') as f:
+with open('/home/Dmitry315/mysite/cities.json',mode='r',encoding='utf-8') as f:
     CitiesBase = json.load(f)
 
 app = Flask(__name__)
@@ -213,7 +211,7 @@ def play_game(res,req):
         sessionStorage[user_id]['called_cities'].append(alisa_city)
         res['response']['buttons'].append({
             'title': 'Где этот город?',
-            'url':'https://yandex.ru/maps/?mode=search&text=' + alisa_city,
+            'url':'https://yandex.ru/maps/?mode=search&text=' + alisa_city.replace(' ', '+'),
             'hide': True
         })
     else:
