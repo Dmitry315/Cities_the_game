@@ -197,7 +197,7 @@ def play_game(res,req):
         return
     elif not sessionStorage[user_id]['called_cities']:
         sessionStorage[user_id]['called_cities'].append(city)
-    elif (city[0].lower() == sessionStorage[user_id]['called_cities'][-1][-2].lower() and sessionStorage[user_id]['called_cities'][-1][-1].lower() in ['ь', 'ы']) or city[0].lower() == sessionStorage[user_id]['called_cities'][-1][-1].lower():
+    elif (city[0].lower() != sessionStorage[user_id]['called_cities'][-1][-2].lower() and sessionStorage[user_id]['called_cities'][-1][-1].lower() in ['ъ', 'ь', 'ы']) or city[0].lower() != sessionStorage[user_id]['called_cities'][-1][-1].lower():
         litter = sessionStorage[user_id]['called_cities'][-1][-1]
         litter = sessionStorage[user_id]['called_cities'][-1][-2] if litter in ['ъ', 'ь', 'ы'] else litter
         res['response']['text'] = f'Нет, тебе на "{litter}".'
