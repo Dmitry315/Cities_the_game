@@ -1,6 +1,7 @@
 import json
 from flask import Flask, request
 import logging
+import requests
 
 with open('/home/Dmitry315/mysite/cities.json',mode='r',encoding='utf-8') as f:
     CitiesBase = json.load(f)
@@ -8,8 +9,9 @@ with open('/home/Dmitry315/mysite/cities.json',mode='r',encoding='utf-8') as f:
 app = Flask(__name__)
 
 logging.basicConfig(level=logging.INFO, filename='app.log', format='%(asctime)s %(levelname)s %(name)s %(message)s')
-GeoCode = lambda x: 'http://geocode-maps.yandex.ru/1.x/?geocode=' + x + '&format=json'
+GeoCode = 'http://geocode-maps.yandex.ru/1.x/'
 sessionStorage = {}
+API_KEY = 'dda3ddba-c9ea-4ead-9010-f43fbc15c6e3'
 
 
 @app.route('/post', methods=['POST'])
@@ -66,7 +68,9 @@ def handle_dialog(res, req):
         res['response']['text'] = '''Один игрок начинает с любого города.
         Следующий игрок называет город, начинающийся с буквы, на которую заканчивается этот город.
         Затем другой игрок называет город, начинающийся с буквы, на которую заканчивается предыдущий город
-        И так далее. Я могу подсказать вам 3 раза.'''
+        И так далее. Я могу подсказать вам 3 раза. Желательно писать просто название города.
+        Когда попадаются города, оканчивающиеся на "ь" или "ы" то нужно назвать город,
+        оканчивающийся на предпоследнюю букву.'''
         if not sessionStorage[user_id]['game_started']:
             res['response']['buttons'] = [
                 {
@@ -146,6 +150,7 @@ def play_game(res,req):
     ]
     # user's move
     city = get_city(req)
+
     if req['request']['original_utterance'].lower() in ['я проиграл','я сдаюсь','ты победила','ты выиграла','сдаюсь']:
         res['response']['text'] = 'В следующий раз ты обязательно победишь. Сыграем ещё?'
         sessionStorage[user_id]['game_started'] = False
@@ -188,27 +193,31 @@ def play_game(res,req):
         ]
         return
     if not city:
+        if check_city(req):
+            city = req['request']['original_utterance'].lower()
+    if not city:
         res['response']['text'] = 'Я не знаю такого города, попробуй другой'
         return
     if city in sessionStorage[user_id]['called_cities']:
         res['response']['text'] = 'Этот город уже был! Назови другой.'
         return
     elif not sessionStorage[user_id]['called_cities']:
-        sessionStorage[user_id]['called_cities'].append(city)
-    elif (city[0].lower() != sessionStorage[user_id]['called_cities'][-1][-2].lower() and sessionStorage[user_id]['called_cities'][-1][-1].lower() in ['ъ', 'ь', 'ы']) or city[0].lower() != sessionStorage[user_id]['called_cities'][-1][-1].lower():
+        sessionStorage[user_id]['called_cities'].append(city.lower())
+    elif not((city[0].lower() == sessionStorage[user_id]['called_cities'][-1][-2].lower() and sessionStorage[user_id]['called_cities'][-1][-1].lower() in ['ъ', 'ь', 'ы']) or city[0].lower() == sessionStorage[user_id]['called_cities'][-1][-1].lower()):
         litter = sessionStorage[user_id]['called_cities'][-1][-1]
         litter = sessionStorage[user_id]['called_cities'][-1][-2] if litter in ['ъ', 'ь', 'ы'] else litter
         res['response']['text'] = f'Нет, тебе на "{litter}".'
         return
     else:
-        sessionStorage[user_id]['called_cities'].append(city)
+        sessionStorage[user_id]['called_cities'].append(city.lower())
     # Alisa's move
     litter = sessionStorage[user_id]['called_cities'][-1][-1]
     litter = sessionStorage[user_id]['called_cities'][-1][-2] if litter in ['ъ', 'ь', 'ы'] else litter
     alisa_city = get_city_by_litter(litter, user_id)
     if alisa_city:
-        res['response']['text'] = f'{alisa_city}, тебе на "{alisa_city[-1]}"'
-        sessionStorage[user_id]['called_cities'].append(alisa_city)
+        last_litter = alisa_city[-2] if alisa_city[-1] in ['ъ', 'ь', 'ы'] else alisa_city[-1]
+        res['response']['text'] = f'{alisa_city}, тебе на "{last_litter}"'
+        sessionStorage[user_id]['called_cities'].append(alisa_city.lower())
         res['response']['buttons'].append({
             'title': 'Где этот город?',
             'url':'https://yandex.ru/maps/?mode=search&text=' + alisa_city.replace(' ', '+'),
@@ -232,9 +241,23 @@ def play_game(res,req):
 def get_city_by_litter(litter, user_id):
     available = CitiesBase[litter]
     for city in available:
-        if city not in sessionStorage[user_id]['called_cities']:
+        if city.lower() not in sessionStorage[user_id]['called_cities']:
             return city
     return False
+
+def check_city(req):
+    try:
+        city = req['request']['original_utterance']
+        params={
+            'geocode': city,
+            'format': 'json',
+        }
+        response = requests.get(GeoCode, params=params).json()
+        toponym = response["response"]["GeoObjectCollection"]["featureMember"]
+        return bool(toponym)
+    except Exception as err:
+        return False
+
 
 def get_first_name(req):
     # перебираем сущности
