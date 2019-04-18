@@ -190,6 +190,10 @@ def play_game(res,req):
             'title': 'Подсказка (' + str(sessionStorage[user_id]['hints']) + ')',
             'hide': True
         },
+        {
+            'title': 'Сдаюсь',
+            'hide': True
+        },
         ]
         return
     if not city:
