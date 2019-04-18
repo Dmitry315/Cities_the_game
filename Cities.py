@@ -3,17 +3,25 @@ from flask import Flask, request
 import logging
 import requests
 
-with open('/home/Dmitry315/mysite/cities.json',mode='r',encoding='utf-8') as f:
+# change to this and print city that lasts on 'a' to see Alisa lose
+#            V
+# with open('/home/Dmitry315/mysite/cities_to_show_win.json', mode='r', encoding='utf-8') as f:
+with open('/home/Dmitry315/mysite/cities.json', mode='r', encoding='utf-8') as f:
     CitiesBase = json.load(f)
 
+# init Flask
 app = Flask(__name__)
 
+# add logging
 logging.basicConfig(level=logging.INFO, filename='app.log', format='%(asctime)s %(levelname)s %(name)s %(message)s')
+# Yandex geocoder server to check city
 GeoCode = 'http://geocode-maps.yandex.ru/1.x/'
-sessionStorage = {}
 API_KEY = 'dda3ddba-c9ea-4ead-9010-f43fbc15c6e3'
+# save information about users in session
+sessionStorage = {}
 
 
+# main
 @app.route('/post', methods=['POST'])
 def index():
     logging.info('Request: %r', request.json)
@@ -30,9 +38,11 @@ def index():
 
     return json.dumps(response)
 
+
 def handle_dialog(res, req):
     user_id = req['session']['user_id']
 
+    # get there if user starts dialog
     if req['session']['new']:
         res['response']['text'] = 'Привет! Назови своё имя!'
         res['response']['buttons'] = []
@@ -42,6 +52,7 @@ def handle_dialog(res, req):
             'called_cities': []
         }
         return
+    # git there if user didn't said his name
     if not sessionStorage[user_id]['first_name']:
         name = get_first_name(req)
         if name:
@@ -61,9 +72,11 @@ def handle_dialog(res, req):
                 }
             ]
             sessionStorage[user_id]['first_name'] = name.title()
+        # get there is no name in answer
         else:
             res['response']['text'] = 'Не расслышала. Повтори, пожалуйста!'
         return
+    # help for user
     if req['request']['original_utterance'].lower() in ['помощь', 'расскажи правила']:
         res['response']['text'] = '''Один игрок начинает с любого города.
         Следующий игрок называет город, начинающийся с буквы, на которую заканчивается этот город.
@@ -83,32 +96,35 @@ def handle_dialog(res, req):
                 }]
         else:
             res['response']['buttons'] = [
-            {
-                'title': 'Подсказка (' + str(sessionStorage[user_id]['hints']) + ')',
-                'hide': True
-            }]
+                {
+                    'title': 'Подсказка (' + str(sessionStorage[user_id]['hints']) + ')',
+                    'hide': True
+                }]
         return
+    # show city to user
     if sessionStorage[user_id]['game_started'] and req['request']['original_utterance'].lower() == 'где этот город?':
         res['response']['text'] = 'Город можно посмотреть на Яндекс картах!'
         res['response']['buttons'] = [
-        {
-            'title': 'Помощь',
-            'hide': True,
-        },
-        {
-            'title': 'Подсказка (' + str(sessionStorage[user_id]['hints']) + ')',
-            'hide': True
-        },
-        {
-            'title': 'Сдаюсь',
-            'hide': True
-        },
-    ]
+            {
+                'title': 'Помощь',
+                'hide': True,
+            },
+            {
+                'title': 'Подсказка (' + str(sessionStorage[user_id]['hints']) + ')',
+                'hide': True
+            },
+            {
+                'title': 'Сдаюсь',
+                'hide': True
+            },
+        ]
         return
+    # continue game
     if sessionStorage[user_id]['game_started']:
         play_game(res, req)
         return
-    if req['request']['original_utterance'].lower() in ['да','ладно','хорошо','ок','ok']:
+    # game start
+    if req['request']['original_utterance'].lower() in ['да', 'ладно', 'хорошо', 'ок', 'ok']:
         res['response']['text'] = 'Хорошо, начинай!'
         sessionStorage[user_id]['game_started'] = True
         sessionStorage[user_id]['called_cities'] = []
@@ -124,15 +140,19 @@ def handle_dialog(res, req):
             },
         ]
         return
+    # reject
     if req['request']['original_utterance'].lower() in ['нет', 'в следующий раз', 'потом']:
         res['response']['text'] = 'Ну и ладно!'
         res['response']['end_session'] = True
         return
+    # if something gone wrong
     else:
         res['response']['text'] = 'Не расслышала. Повтори, пожалуйста!'
         return
 
-def play_game(res,req):
+
+# game cycle
+def play_game(res, req):
     user_id = req['session']['user_id']
     res['response']['buttons'] = [
         {
@@ -150,64 +170,78 @@ def play_game(res,req):
     ]
     # user's move
     city = get_city(req)
-
-    if req['request']['original_utterance'].lower() in ['я проиграл','я сдаюсь','ты победила','ты выиграла','сдаюсь']:
+    # user surrender
+    if req['request']['original_utterance'].lower() in ['я проиграл', 'я сдаюсь', 'ты победила', 'ты выиграла',
+                                                        'сдаюсь']:
         res['response']['text'] = 'В следующий раз ты обязательно победишь. Сыграем ещё?'
         sessionStorage[user_id]['game_started'] = False
         res['response']['buttons'] = [
-                {
-                    'title': 'Да',
-                    'hide': True
-                },
-                {
-                    'title': 'Нет',
-                    'hide': True
-                }]
+            {
+                'title': 'Да',
+                'hide': True
+            },
+            {
+                'title': 'Нет',
+                'hide': True
+            }]
+        # delete list of cities for the next game
         sessionStorage[user_id]['cities'] = []
         return
-    if req['request']['original_utterance'].lower() in ['подсказка (3)', 'подсказка (2)', 'подсказка (1)', 'подсказка (0)', 'дай подсказку','подскажи']:
+    # user use hint
+    if req['request']['original_utterance'].lower() in ['подсказка (3)', 'подсказка (2)', 'подсказка (1)',
+                                                        'подсказка (0)', 'дай подсказку', 'подскажи']:
+        # user has no hints
         if sessionStorage[user_id]['hints'] < 1:
             res['response']['text'] = 'У вас больше не осталось подсказок'
+        # users unique chance to lose hints before game started :)
         elif not sessionStorage[user_id]['called_cities']:
             res['response']['text'] = 'Хорошо, предлагаю город Москва.'
             sessionStorage[user_id]['hints'] -= 1
         else:
             litter = sessionStorage[user_id]['called_cities'][-1][-1]
-            litter = sessionStorage[user_id]['called_cities'][-1][-2] if litter in ['ъ','ь','ы'] else litter
+            litter = sessionStorage[user_id]['called_cities'][-1][-2] if litter in ['ъ', 'ь', 'ы'] else litter
             res['response']['text'] = sessionStorage[user_id]['called_cities'][-1]
             hinted_city = get_city_by_litter(litter, user_id)
             if hinted_city:
                 res['response']['text'] = f'Хорошо, предлагаю город {hinted_city}.'
                 sessionStorage[user_id]['hints'] -= 1
+            # Alisa doesn't know, but it doesn't mean that there is no such city
             else:
                 res['response']['text'] = 'Извини, я не знаю.'
         res['response']['buttons'] = [
-        {
-            'title': 'Помощь',
-            'hide': True,
-        },
-        {
-            'title': 'Подсказка (' + str(sessionStorage[user_id]['hints']) + ')',
-            'hide': True
-        },
-        {
-            'title': 'Сдаюсь',
-            'hide': True
-        },
+            {
+                'title': 'Помощь',
+                'hide': True,
+            },
+            {
+                'title': 'Подсказка (' + str(sessionStorage[user_id]['hints']) + ')',
+                'hide': True
+            },
+            {
+                'title': 'Сдаюсь',
+                'hide': True
+            },
         ]
         return
+    # check with geocoder if there is no such city in data base
     if not city:
         if check_city(req):
             city = req['request']['original_utterance'].lower()
+    # if there is no such city in geocoder
     if not city:
         res['response']['text'] = 'Я не знаю такого города, попробуй другой'
         return
+    # if user repeat city
     if city in sessionStorage[user_id]['called_cities']:
         res['response']['text'] = 'Этот город уже был! Назови другой.'
         return
+    # if session is empty
     elif not sessionStorage[user_id]['called_cities']:
         sessionStorage[user_id]['called_cities'].append(city.lower())
-    elif not((city[0].lower() == sessionStorage[user_id]['called_cities'][-1][-2].lower() and sessionStorage[user_id]['called_cities'][-1][-1].lower() in ['ъ', 'ь', 'ы']) or city[0].lower() == sessionStorage[user_id]['called_cities'][-1][-1].lower()):
+    # check that city starts with litter on which last city lasts
+    elif not ((city[0].lower() == sessionStorage[user_id]['called_cities'][-1][-2].lower() and
+                       sessionStorage[user_id]['called_cities'][-1][-1].lower() in ['ъ', 'ь', 'ы']) or city[
+        0].lower() == sessionStorage[user_id]['called_cities'][-1][-1].lower()):
         litter = sessionStorage[user_id]['called_cities'][-1][-1]
         litter = sessionStorage[user_id]['called_cities'][-1][-2] if litter in ['ъ', 'ь', 'ы'] else litter
         res['response']['text'] = f'Нет, тебе на "{litter}".'
@@ -216,17 +250,20 @@ def play_game(res,req):
         sessionStorage[user_id]['called_cities'].append(city.lower())
     # Alisa's move
     litter = sessionStorage[user_id]['called_cities'][-1][-1]
+    # except litter on which city can't lasts
     litter = sessionStorage[user_id]['called_cities'][-1][-2] if litter in ['ъ', 'ь', 'ы'] else litter
     alisa_city = get_city_by_litter(litter, user_id)
     if alisa_city:
         last_litter = alisa_city[-2] if alisa_city[-1] in ['ъ', 'ь', 'ы'] else alisa_city[-1]
         res['response']['text'] = f'{alisa_city}, тебе на "{last_litter}"'
         sessionStorage[user_id]['called_cities'].append(alisa_city.lower())
+        # show user link on this city
         res['response']['buttons'].append({
             'title': 'Где этот город?',
-            'url':'https://yandex.ru/maps/?mode=search&text=' + alisa_city.replace(' ', '+'),
+            'url': 'https://yandex.ru/maps/?mode=search&text=' + alisa_city.replace(' ', '+'),
             'hide': True
         })
+    # Alisa lose and game stops
     else:
         res['response']['text'] = 'Я сдаюсь. Сыграем ещё?'
         res['response']['buttons'] = [
@@ -242,6 +279,8 @@ def play_game(res,req):
         sessionStorage[user_id]['called_cities'] = []
         return
 
+
+# search in data base for a city that lasts on some litter
 def get_city_by_litter(litter, user_id):
     available = CitiesBase[litter]
     for city in available:
@@ -249,10 +288,12 @@ def get_city_by_litter(litter, user_id):
             return city
     return False
 
+
+# check city with geocoder
 def check_city(req):
     try:
         city = req['request']['original_utterance']
-        params={
+        params = {
             'geocode': city,
             'format': 'json',
         }
@@ -263,6 +304,7 @@ def check_city(req):
         return False
 
 
+# pull first name from request (None if it doesn't find)
 def get_first_name(req):
     # перебираем сущности
     for entity in req['request']['nlu']['entities']:
@@ -272,6 +314,8 @@ def get_first_name(req):
             # Во всех остальных случаях возвращаем None.
             return entity['value'].get('first_name', None)
 
+
+# pull city name from request (None if it doesn't find)
 def get_city(req):
     # перебираем именованные сущности
     for entity in req['request']['nlu']['entities']:
@@ -279,6 +323,7 @@ def get_city(req):
         if entity['type'] == 'YANDEX.GEO':
             # возвращаем None, если не нашли сущности с типом YANDEX.GEO
             return entity['value'].get('city', None)
+
 
 if __name__ == '__main__':
     app.run()
