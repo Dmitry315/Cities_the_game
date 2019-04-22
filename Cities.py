@@ -44,14 +44,51 @@ def handle_dialog(res, req):
 
     # get there if user starts dialog
     if req['session']['new']:
-        res['response']['text'] = 'Привет! Назови своё имя!'
-        res['response']['buttons'] = []
+        res['response']['text'] = '''С помощью этого навыка вы сможете сыграть в города, но сперва назовите своё имя!
+        Если не хотите играть, вы сможете закончить в любой момент после того как представитесь.
+        '''
+        res['response']['buttons'] = [
+            {
+                'title': 'Помощь',
+                'hide': True
+            },
+        ]
         sessionStorage[user_id] = {
             'first_name': None,
             'game_started': False,
             'called_cities': []
         }
         return
+
+    # help for user
+    if req['request']['original_utterance'].lower() in ['помощь', 'расскажи правила']:
+        res['response']['text'] = '''Один игрок начинает с любого города.
+        Следующий игрок называет город, начинающийся с буквы, на которую заканчивается этот город.
+        Затем другой игрок называет город, начинающийся с буквы, на которую заканчивается предыдущий город
+        И так далее. Я могу подсказать вам 3 раза. Желательно писать просто название города.
+        Когда попадаются города, оканчивающиеся на "ь" или "ы" то нужно назвать город,
+        оканчивающийся на предпоследнюю букву.'''
+        if not sessionStorage[user_id]['first_name']:
+            res['response']['text'] += ' Так как вас зовут?'
+        elif not sessionStorage[user_id]['game_started']:
+            res['response']['buttons'] = [
+                {
+                    'title': 'Да',
+                    'hide': True
+                },
+                {
+                    'title': 'Нет',
+                    'hide': True
+                }]
+        else:
+            res['response']['buttons'] = [
+                {
+                    'title': 'Подсказка (' + str(sessionStorage[user_id]['hints']) + ')',
+                    'hide': True
+                }]
+        return
+
+
     # git there if user didn't said his name
     if not sessionStorage[user_id]['first_name']:
         name = get_first_name(req)
@@ -76,31 +113,7 @@ def handle_dialog(res, req):
         else:
             res['response']['text'] = 'Не расслышала. Повтори, пожалуйста!'
         return
-    # help for user
-    if req['request']['original_utterance'].lower() in ['помощь', 'расскажи правила']:
-        res['response']['text'] = '''Один игрок начинает с любого города.
-        Следующий игрок называет город, начинающийся с буквы, на которую заканчивается этот город.
-        Затем другой игрок называет город, начинающийся с буквы, на которую заканчивается предыдущий город
-        И так далее. Я могу подсказать вам 3 раза. Желательно писать просто название города.
-        Когда попадаются города, оканчивающиеся на "ь" или "ы" то нужно назвать город,
-        оканчивающийся на предпоследнюю букву.'''
-        if not sessionStorage[user_id]['game_started']:
-            res['response']['buttons'] = [
-                {
-                    'title': 'Да',
-                    'hide': True
-                },
-                {
-                    'title': 'Нет',
-                    'hide': True
-                }]
-        else:
-            res['response']['buttons'] = [
-                {
-                    'title': 'Подсказка (' + str(sessionStorage[user_id]['hints']) + ')',
-                    'hide': True
-                }]
-        return
+
     # show city to user
     if sessionStorage[user_id]['game_started'] and req['request']['original_utterance'].lower() == 'где этот город?':
         res['response']['text'] = 'Город можно посмотреть на Яндекс картах!'
@@ -260,7 +273,7 @@ def play_game(res, req):
         # show user link on this city
         res['response']['buttons'].append({
             'title': 'Где этот город?',
-            'url': 'https://yandex.ru/maps/?mode=search&text=' + alisa_city.replace(' ', '+'),
+            'url': 'https://yandex.ru/maps/?mode=search&text=' + 'город+' + alisa_city.replace(' ', '+'),
             'hide': True
         })
     # Alisa lose and game stops
